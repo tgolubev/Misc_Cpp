@@ -126,9 +126,8 @@ struct Variable {
 
 //------------------------------------------------------------------------------------------
 
-Token_stream ts;
 
-double expression();
+double expression(Token_stream &ts);
 
 
 vector<Variable> var_names;   //store names of variables
@@ -212,7 +211,7 @@ Token Token_stream::get()  //read characters from cin and compose a Token
             char next_char;
             cin >> next_char;
             if(next_char == '=' && is_declared(s)){
-                Token t = ts.get();
+                Token t = get();
                 set_value(s, t.value);      // if have = after variable name and variable is already declared, then means is an assignment--> call expression
                 return t;
             }
@@ -249,26 +248,22 @@ double get_value(string s)       //return the value of variable named s
 	error("get: undefined name ",s);
 }
 
-
-
-
-
 //-----------------------------------------------------------------------------
 //deal with numbers and parentheses
-double primary()
+double primary(Token_stream &ts)
 {
 	Token t = ts.get();
 	switch (t.kind) {
     case '(':                    // handle '(' expression ')'
-	{	double d = expression();
+    {	double d = expression(ts);
 		t = ts.get();
         if (t.kind != ')') error("')' expected");
         return d;
 	}
 	case '-':
-        return - primary();       //unitary - (i.e. if expression starts with -5)
+        return - primary(ts);       //unitary - (i.e. if expression starts with -5)
     case '+':
-        return primary();         //unitary +
+        return primary(ts);         //unitary +
 	case number:
         return t.value;            //return number's value
 	case name:
@@ -276,7 +271,7 @@ double primary()
     case square_root:
     {    t = ts.get();
         if (t.kind != '(') error("'(' expected");   //after sqrt should have '('
-        double e = expression();
+        double e = expression(ts);
         //check for closing )
         t = ts.get();
         if (t.kind != ')') error("')' expected");
@@ -286,11 +281,11 @@ double primary()
     case power:
     {   t = ts.get();
         if (t.kind != '(') error("'(' expected");   //after pow should have '('
-        double p = expression();
+        double p = expression(ts);
         //check for ,
         t = ts.get();
         if (t.kind != ',') error("',' expected. Recall format for power is pow(x,i) is x^i.");
-        double i = expression();
+        double i = expression(ts);
         //check for closing )
         t = ts.get();
         if (t.kind != ')') error("')' expected");
@@ -304,17 +299,17 @@ double primary()
 //---------------------------------------------------------------------------------
 
 //deal with *,/, and %. Will be operated on after all primaries have been evaluated.
-double term()
+double term(Token_stream &ts)
 {
-	double left = primary();
+    double left = primary(ts);
 	while(true) {
 		Token t = ts.get();
 		switch(t.kind) {
 		case '*':
-			left *= primary();
+            left *= primary(ts);
 			break;
 		case '/':
-		{	double d = primary();
+        {	double d = primary(ts);
 			if (d == 0) error("divide by zero");
 			left /= d;
 			break;
@@ -322,7 +317,7 @@ double term()
         case '%':
                 {
                     int i1 = narrow_cast<int>(left);  //% requires int operators. cast to int.
-                    int i2 = narrow_cast<int>(term());
+                    int i2 = narrow_cast<int>(term(ts));
                     if (i2 == 0) error("%: divide by zero");
                     left = i1%i2;
                     break;
@@ -336,17 +331,17 @@ double term()
 
 //------------------------------------------------------------------------------------
 //deal with + and - (will be operated on, after all terms have been evaluated)
-double expression()
+double expression(Token_stream &ts)
 {
-    double left = term();   //read and evaluate a term
+    double left = term(ts);   //read and evaluate a term
 	while(true) {
 		Token t = ts.get();
 		switch(t.kind) {
 		case '+':
-			left += term();
+            left += term(ts);
 			break;
 		case '-':
-			left -= term();
+            left -= term(ts);
 			break;
 		default:
             ts.unget(t);       //if next character is not + or -, then previous thing is a term which we return.
@@ -360,7 +355,7 @@ double expression()
 //handle: name =  expression
 //declare a variable called "name" with the initial value "expression"
 
-double declaration()
+double declaration(Token_stream &ts)
 {
 	Token t = ts.get();
     if (t.kind != name) error ("name expected in declaration");
@@ -368,28 +363,28 @@ double declaration()
 	if (is_declared(name)) error(name, " declared twice");
 	Token t2 = ts.get();
 	if (t2.kind != '=') error("= missing in declaration of " ,name);
-	double d = expression();
+    double d = expression(ts);
     var_names.push_back(Variable(name,d));
 	return d;
 }
 
 //---------------------------------------------------------------------
 
-double statement()                  //recognizes if is a declaration or expression
+double statement(Token_stream &ts)                  //recognizes if is a declaration or expression
 {
 	Token t = ts.get();
 	switch(t.kind) {
 	case let:
-		return declaration();
+        return declaration(ts);
 	default:
 		ts.unget(t);
-		return expression();
+        return expression(ts);
 	}
 }
 
 //---------------------------------------------------------------------
 
-void clean_up_mess()
+void clean_up_mess(Token_stream &ts)
 {
 	ts.ignore(print);
 }
@@ -397,7 +392,7 @@ void clean_up_mess()
 //------------------------------------------------------------------
 
 
-void calculate()
+void calculate(Token_stream &ts)
 {
     while(true) try {       //while(true) will continue in the loop until reaches a break or return.
 		cout << prompt;
@@ -405,12 +400,12 @@ void calculate()
         while (t.kind == print) t=ts.get();  //first eat all "print" statements
         if (t.kind == quit) return;         //quit
         ts.unget(t);
-		cout << result << statement() << endl;
+        cout << result << statement(ts) << endl;
 	}
 	catch(runtime_error& e) {
         cerr << "Error: " << e.what() << endl;
         cerr << "Please re-enter your expression. If don't see the '>' prompt,  type ; followed by [Enter]" << endl;
-		clean_up_mess();
+        clean_up_mess(ts);
 	}
 }
 
@@ -428,8 +423,8 @@ int main()
         var_names.push_back(Variable("pi",3.1415926535));
         var_names.push_back(Variable("e", 2.7182818284));
         var_names.push_back(Variable("k", 1000));
-
-		calculate();
+        Token_stream ts;
+        calculate(ts);
 		return 0;
 	}
 	catch (exception& e) {
