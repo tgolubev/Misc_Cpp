@@ -116,6 +116,23 @@ private:
     Token buffer;         //keep Token put back using unget() here
 };
 
+//--------------------------------------------------------------------------------------------
+
+struct Variable {
+    string name;
+    double value;
+    Variable(string n, double v) :name(n), value(v) { }
+};
+
+//------------------------------------------------------------------------------------------
+
+Token_stream ts;
+
+double expression();
+
+
+vector<Variable> var_names;   //store names of variables
+
 //----------------------------------------------------------------------------------
 
 void Token_stream::unget(Token t)  //Put the got Token back. Token t is stored in buffer.
@@ -126,6 +143,27 @@ void Token_stream::unget(Token t)  //Put the got Token back. Token t is stored i
 }
 
 //--------------------------------------------------------------------------------------
+
+void set_value(string s, double d)           //set the value of variable named s to d
+{
+    for (int i = 0; i<=var_names.size(); ++i)
+        if (var_names[i].name == s) {
+            var_names[i].value = d;
+            return;
+        }
+    error("set: undefined name ",s);
+}
+
+//---------------------------------------------------------------------------------
+
+bool is_declared(string s)      //check is variable is already declared (already in var_names vector)
+{
+    for (int i = 0; i<var_names.size(); ++i)
+        if (var_names[i].name == s) return true;
+    return false;
+}
+
+//-------------------------------------------------------------------------------
 
 Token Token_stream::get()  //read characters from cin and compose a Token
 {
@@ -170,7 +208,16 @@ Token Token_stream::get()  //read characters from cin and compose a Token
             if (s == quitkey) return Token(quit);  //return token corresponding to quit
             if (s == sqrt_key) return Token(square_root);
             if (s == power_key) return Token(power);
-			return Token(name,s);
+            //check if there's an '=' after variable name
+            char next_char;
+            cin >> next_char;
+            if(next_char == '=' && is_declared(s)){
+                Token t = ts.get();
+                set_value(s, t.value);      // if have = after variable name and variable is already declared, then means is an assignment--> call expression
+                return t;
+            }
+            cin.unget();       //return the char back to cin stream so can be read elsewhere
+            return Token(name,s);
 		}
 		error("Bad token");
 	}
@@ -193,18 +240,6 @@ void Token_stream::ignore(char c)  //used for clean_up_mess() after an error occ
 		if (ch==c) return;
 }
 
-//--------------------------------------------------------------------------------------------
-
-struct Variable {
-	string name;
-	double value;
-	Variable(string n, double v) :name(n), value(v) { }
-};
-
-//------------------------------------------------------------------------------------------
-
-vector<Variable> var_names;   //store names of variables
-
 //---------------------------------------------------------------------------------------
 
 double get_value(string s)       //return the value of variable named s
@@ -214,33 +249,9 @@ double get_value(string s)       //return the value of variable named s
 	error("get: undefined name ",s);
 }
 
-//----------------------------------------------------------------------------------------
-
-void set_value(string s, double d)           //set the value of variable named s to d
-{
-    for (int i = 0; i<=var_names.size(); ++i)
-        if (var_names[i].name == s) {
-            var_names[i].value = d;
-			return;
-		}
-	error("set: undefined name ",s);
-}
-
-//---------------------------------------------------------------------------------
-
-bool is_declared(string s)      //check is variable is already declared (already in var_names vector)
-{
-    for (int i = 0; i<var_names.size(); ++i)
-        if (var_names[i].name == s) return true;
-	return false;
-}
-
-//-------------------------------------------------------------------------------
 
 
-Token_stream ts;
 
-double expression();
 
 //-----------------------------------------------------------------------------
 //deal with numbers and parentheses
@@ -418,8 +429,6 @@ int main()
         var_names.push_back(Variable("e", 2.7182818284));
         var_names.push_back(Variable("k", 1000));
 
-
-
 		calculate();
 		return 0;
 	}
@@ -431,3 +440,4 @@ int main()
 		cerr << "exception\n";
 		return 2;
 	}
+
