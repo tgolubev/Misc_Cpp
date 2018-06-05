@@ -17,12 +17,17 @@
    To define a variable use the keyword 'let' followed by the variable definition:
    i.e. let x = 5;
 
+   Predefined names: pi, e, and k = 1000 are available for use.
+
+   The calculator also understands e notation: i.e.  5e2 = 500
+
+   Functions available: sqrt() and pow(x,i) = x^i. x and i can be any expression.
+
    Variable names must start with a letter and can have numbers, but no special symbols.
-   End each expression with ; followed by [Enter] to print the results. Use Q to quit.
+   End each expression with ; followed by [Enter] to print the results. Use 'quit' to quit.
 
    If you have made a typo, you will get an error message. To enter another expression, first enter
    ; followed by [Enter].
-
 
 
     The grammar for input is:
@@ -58,6 +63,8 @@
     Primary:
         Number
         Name
+        sqrt ( Expression )
+        pow(Expression, int)
         ( Expression )
         - Primary
         + Primary
@@ -71,15 +78,19 @@
 #include "std_lib_facilities.h"
 
 //-----------------------------------------------------------------------------------
-const char number = '8';    // t.kind==number means that t is a number Token
-const char quit   = 'q';    // t.kind==quit means that t is a quit Token
-const char print  = ';';    // t.kind==print means that t is a print Token
-const char name   = 'a';    // name token
-const char let    = 'L';    // declaration token
-const string declkey = "let";// declaration keyword
-const string quitkey = "quit"; //quit keyword
+const char number = '8';        // t.kind==number means that t is a number Token
+const char quit   = 'q';        // t.kind==quit means that t is a quit Token
+const char print  = ';';        // t.kind==print means that t is a print Token
+const char name   = 'a';        // name token
+const char let    = 'L';        // declaration token
+const char square_root   = 's';  //square root token
+const char power = 'p';          //power token
+const string declkey = "let";   // declaration keyword
+const string quitkey = "quit";  //quit keyword
 const string prompt  = "> ";
-const string result  = "= "; // used to indicate that what follows is a result
+const string result  = "= ";    // used to indicate that what follows is a result
+const string sqrt_key    = "sqrt";  //square root keyword
+const string power_key = "pow";    //power keyword
 
 //-------------------------------------------------------------------------------
 
@@ -129,9 +140,9 @@ Token Token_stream::get()  //read characters from cin and compose a Token
 	case '*':
 	case '/':
 	case '%':
-    case quit:
     case print:
 	case '=':
+    case ',':  //for pow
         return Token(ch);  //each character represents itself
 	case '.':
 	case '0':
@@ -153,10 +164,12 @@ Token Token_stream::get()  //read characters from cin and compose a Token
         if (isalpha(ch)) {         //ifalpha checks if ch is a letter. If is a letter, then it could be part of a variable name, so start creating a string.
 			string s;
 			s += ch;
-            while(cin.get(ch) && (isalpha(ch) || isdigit(ch))) s+=ch;  //while next characters are also letters or #'s, add them to string. NOTE: cin.get, does not skip whitespace.
+            while(cin.get(ch) && (isalpha(ch) || isdigit(ch) || ch == '_')) s+=ch;  //while next characters are also letters or #'s, add them to string. NOTE: cin.get, does not skip whitespace.
             cin.unget();                           //put next character back into input stream, if it's not the above.1
             if (s == declkey) return Token(let);   //variable declaration keyword
             if (s == quitkey) return Token(quit);  //return token corresponding to quit
+            if (s == sqrt_key) return Token(square_root);
+            if (s == power_key) return Token(power);
 			return Token(name,s);
 		}
 		error("Bad token");
@@ -238,7 +251,7 @@ double primary()
     case '(':                    // handle '(' expression ')'
 	{	double d = expression();
 		t = ts.get();
-		if (t.kind != ')') error("'(' expected");
+        if (t.kind != ')') error("')' expected");
         return d;
 	}
 	case '-':
@@ -249,6 +262,29 @@ double primary()
         return t.value;            //return number's value
 	case name:
         return get_value(t.name);  //return variable's value
+    case square_root:
+    {    t = ts.get();
+        if (t.kind != '(') error("'(' expected");   //after sqrt should have '('
+        double e = expression();
+        //check for closing )
+        t = ts.get();
+        if (t.kind != ')') error("')' expected");
+        if(e < 0) error("Can't take sqrt of negative number");
+        return sqrt(e);      //sqrt() is from STL library cmath defined in header
+    }
+    case power:
+    {   t = ts.get();
+        if (t.kind != '(') error("'(' expected");   //after pow should have '('
+        double p = expression();
+        //check for ,
+        t = ts.get();
+        if (t.kind != ',') error("',' expected. Recall format for power is pow(x,i) is x^i.");
+        double i = expression();
+        //check for closing )
+        t = ts.get();
+        if (t.kind != ')') error("')' expected");
+        return pow(p,i);
+    }
 	default:
 		error("primary expected");
 	}
@@ -352,7 +388,7 @@ void clean_up_mess()
 
 void calculate()
 {
-    while(true) try {
+    while(true) try {       //while(true) will continue in the loop until reaches a break or return.
 		cout << prompt;
 		Token t = ts.get();
         while (t.kind == print) t=ts.get();  //first eat all "print" statements
@@ -361,7 +397,8 @@ void calculate()
 		cout << result << statement() << endl;
 	}
 	catch(runtime_error& e) {
-		cerr << e.what() << endl;
+        cerr << "Error: " << e.what() << endl;
+        cerr << "Please re-enter your expression. If don't see the '>' prompt,  type ; followed by [Enter]" << endl;
 		clean_up_mess();
 	}
 }
@@ -371,11 +408,17 @@ void calculate()
 int main()
 
 	try {
+        cout << "Welcome to our simple calculator." <<endl;
+        cout <<"Please enter expressions followed by  ; and [Enter] key to print the result. Scientific e notation (i.e. 1e2 = 100) can be used" <<endl;
+        cout <<"Operators +,-,*,/, %(for int) are avalable. Variables can be defined using 'let', i.e. let x = 5;" << endl;
+        cout << "Predefined types pi, e, and k = 1000 and functions sqrt(), pow(x,i) = x^i (x and i can be any expression) are also available." << endl;
+        cout << "To quit, use 'quit' followed by [Enter] key" << endl;
         // predefine names:
         var_names.push_back(Variable("pi",3.1415926535));
         var_names.push_back(Variable("e", 2.7182818284));
+        var_names.push_back(Variable("k", 1000));
 
-        //could add recognition of i.e. 10e2 notation, and ^ for powers.
+
 
 		calculate();
 		return 0;
